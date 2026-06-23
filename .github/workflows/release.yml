@@ -23,7 +23,7 @@ jobs:
       - name: Build DmxVst (VST3 + Standalone)
         shell: pwsh
         run: |
-          cmake --build build --config Release --target DmxVst 2>&1 | Tee-Object -FilePath build-windows.log -Append
+          cmake --build build --config Release --target DmxVst_All 2>&1 | Tee-Object -FilePath build-windows.log -Append
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build LuxAutomator (Standalone)
@@ -98,7 +98,7 @@ jobs:
       - name: Build DmxVst (AU/VST3)
         run: |
           set -o pipefail
-          cmake --build build --config Release --target DmxVst 2>&1 | tee -a build-macos.log
+          cmake --build build --config Release --target DmxVst_All 2>&1 | tee -a build-macos.log
 
       - name: Build LuxAutomator (Standalone)
         run: |
