@@ -59,7 +59,7 @@ public:
         {
             transport.setSource (nullptr);
             readerSource.reset();
-            loadedFile = {};
+            loadedFile = juce::File();
             return false;
         }
 
