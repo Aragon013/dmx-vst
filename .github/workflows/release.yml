@@ -32,26 +32,27 @@ jobs:
           cmake --build build --config Release --target LuxAutomator 2>&1 | Tee-Object -FilePath build-windows.log -Append
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Upload build log on failure
-        if: failure()
-        shell: bash
-        run: |
-          git config user.email "ci@ci"
-          git config user.name "ci"
-          git checkout --orphan ci-logs-windows
-          git reset
-          cp build-windows.log win-build.log 2>/dev/null || true
-          git add -f win-build.log
-          git commit -m "CI log windows" || true
-          git push -f origin ci-logs-windows
-
       - name: Prepare artifacts
         shell: pwsh
         run: |
+          "=== DmxVst_artefacts tree ===" | Tee-Object -FilePath build-windows.log -Append
+          Get-ChildItem -Recurse build/DmxVst_artefacts/Release -ErrorAction SilentlyContinue | ForEach-Object FullName | Tee-Object -FilePath build-windows.log -Append
+          "=== LuxAutomator_artefacts tree ===" | Tee-Object -FilePath build-windows.log -Append
+          Get-ChildItem -Recurse build/LuxAutomator_artefacts/Release -ErrorAction SilentlyContinue | ForEach-Object FullName | Tee-Object -FilePath build-windows.log -Append
+
           New-Item -ItemType Directory -Path "dist/vst3","dist/standalone" -Force | Out-Null
-          Copy-Item "build/DmxVst_artefacts/Release/VST3/LuxSync DMX.vst3" "dist/vst3/" -Recurse -Force
-          Copy-Item "build/DmxVst_artefacts/Release/Standalone/LuxSync DMX.exe" "dist/standalone/" -Force
-          Copy-Item "build/LuxAutomator_artefacts/Release/LuxSync AI Automator.exe" "dist/standalone/" -Force
+
+          $vst3 = Get-ChildItem -Path build/DmxVst_artefacts/Release -Recurse -Directory -Filter *.vst3 -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $vst3) { throw "VST3 bundle not found under build/DmxVst_artefacts/Release" }
+          Copy-Item $vst3.FullName "dist/vst3/" -Recurse -Force
+
+          $dmxExe = Get-ChildItem -Path build/DmxVst_artefacts/Release -Recurse -File -Filter *.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $dmxExe) { throw "DmxVst Standalone .exe not found under build/DmxVst_artefacts/Release" }
+          Copy-Item $dmxExe.FullName "dist/standalone/" -Force
+
+          $autoExe = Get-ChildItem -Path build/LuxAutomator_artefacts/Release -Recurse -File -Filter *.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $autoExe) { throw "LuxAutomator .exe not found under build/LuxAutomator_artefacts/Release" }
+          Copy-Item $autoExe.FullName "dist/standalone/" -Force
 
       - name: Create ZIP archives
         shell: pwsh
@@ -66,6 +67,19 @@ jobs:
           name: windows-releases
           path: "*.zip"
           retention-days: 7
+
+      - name: Upload build log on failure
+        if: failure()
+        shell: bash
+        run: |
+          git config user.email "ci@ci"
+          git config user.name "ci"
+          git checkout --orphan ci-logs-windows
+          git reset
+          cp build-windows.log win-build.log 2>/dev/null || true
+          git add -f win-build.log
+          git commit -m "CI log windows" || true
+          git push -f origin ci-logs-windows
 
   build-macos:
     runs-on: macos-latest
