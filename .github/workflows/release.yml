@@ -8,9 +8,6 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        config: [Release]
     steps:
       - uses: actions/checkout@v4
       
@@ -21,78 +18,55 @@ jobs:
       
       - name: Configure CMake
         run: |
-          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=${{ matrix.config }}
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64
       
       - name: Build DmxVst VST3
         run: |
-          cmake --build build --config ${{ matrix.config }} --target DmxVst
+          cmake --build build --config Release --target DmxVst
       
       - name: Build LuxAutomator Standalone
         run: |
-          cmake --build build --config ${{ matrix.config }} --target LuxAutomator
+          cmake --build build --config Release --target LuxAutomator
       
       - name: Prepare artifacts - Windows VST3
-        run: |
-          mkdir -p artifacts/windows/vst3
-          xcopy build\DmxVst_artefacts\${{ matrix.config }}\VST3\*.vst3 artifacts\windows\vst3\ /E /I /Y
-      
-      - name: Prepare artifacts - Windows Standalone
-        run: |
-          mkdir -p artifacts/windows/standalone
-          xcopy build\LuxAutomator_artefacts\${{ matrix.config }}\Standalone\*.exe artifacts\windows\standalone\ /E /I /Y
-      
-      - name: Package Windows VST3 Installer
         shell: pwsh
         run: |
-          $script = @"
-          ; NSIS Script for LuxSync DMX VST3
-          !include "MUI2.nsh"
-          !include "x64.nsh"
+          New-Item -ItemType Directory -Path "dist\windows\vst3" -Force | Out-Null
+          Copy-Item -Path "build\DmxVst_artefacts\Release\VST3\*" -Destination "dist\windows\vst3\" -Recurse -Force
+      
+      - name: Prepare artifacts - Windows Standalone
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "dist\windows\standalone" -Force | Out-Null
+          Copy-Item -Path "build\LuxAutomator_artefacts\Release\Standalone\*" -Destination "dist\windows\standalone\" -Recurse -Force
+      
+      - name: Package VST3 & Standalone
+        shell: pwsh
+        run: |
+          # Package VST3 as ZIP
+          Compress-Archive -Path "dist\windows\vst3\*" -DestinationPath "LuxSync-DMX-VST3-v${{ github.ref_name }}-Windows-x64.zip" -Force
           
-          Name "LuxSync DMX VST3 v`${VERSION}"
-          OutFile "LuxSync-DMX-VST3-Windows-`${VERSION}.exe"
-          InstallDir "`$PROGRAMFILES\Common Files\VST3"
-          
-          !insertmacro MUI_PAGE_DIRECTORY
-          !insertmacro MUI_PAGE_INSTFILES
-          !insertmacro MUI_LANGUAGE "English"
-          
-          Section "Install"
-            SetOutPath "`$INSTDIR\Aragon\LuxSync DMX.vst3"
-            File /r "artifacts\windows\vst3\LuxSync DMX.vst3\*.*"
-          SectionEnd
-          "@
-          
-          # Crear archivo NSIS
-          $script | Out-File -Encoding ASCII installer.nsi
-          
-          # Descargar NSIS si no está instalado
-          if (-not (Test-Path "C:\Program Files (x86)\NSIS\makensis.exe")) {
-            choco install nsis -y
-          }
-          
-          # Compilar instalador
-          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+          # Package Standalone as ZIP
+          Compress-Archive -Path "dist\windows\standalone\*" -DestinationPath "LuxSync-AIAutomator-v${{ github.ref_name }}-Windows-x64.zip" -Force
       
       - name: Upload Windows VST3 Artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-vst3
-          path: LuxSync-DMX-VST3-Windows-*.exe
+          path: LuxSync-DMX-VST3-*.zip
           retention-days: 7
       
       - name: Upload Windows Standalone Artifact
         uses: actions/upload-artifact@v4
         with:
           name: windows-standalone
-          path: artifacts/windows/standalone
+          path: LuxSync-AIAutomator-v*.zip
           retention-days: 7
 
   build-macos:
     runs-on: macos-latest
     strategy:
       matrix:
-        config: [Release]
         arch: [arm64, x86_64]
     steps:
       - uses: actions/checkout@v4
@@ -104,130 +78,91 @@ jobs:
       
       - name: Configure CMake
         run: |
-          cmake -S . -B build -G Xcode -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
+          cmake -S . -B build -G Xcode -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
       
-      - name: Build DmxVst AU/VST3
+      - name: Build DmxVst (AU/VST3)
         run: |
-          cmake --build build --config ${{ matrix.config }} --target DmxVst
+          cmake --build build --config Release --target DmxVst
       
       - name: Build LuxAutomator Standalone
         run: |
-          cmake --build build --config ${{ matrix.config }} --target LuxAutomator
+          cmake --build build --config Release --target LuxAutomator
       
-      - name: Prepare artifacts - macOS AU
+      - name: Prepare artifacts
         run: |
-          mkdir -p artifacts/macos/au
-          cp -r build/DmxVst_artefacts/${{ matrix.config }}/AU/*.component artifacts/macos/au/
+          mkdir -p dist/au dist/vst3 dist/standalone
+          cp -r build/DmxVst_artefacts/Release/AU/*.component dist/au/ 2>/dev/null || true
+          cp -r build/DmxVst_artefacts/Release/VST3/*.vst3 dist/vst3/ 2>/dev/null || true
+          cp -r build/LuxAutomator_artefacts/Release/Standalone/*.app dist/standalone/ 2>/dev/null || true
       
-      - name: Prepare artifacts - macOS VST3
+      - name: Create DMG for AU Plugin
+        if: always()
         run: |
-          mkdir -p artifacts/macos/vst3
-          cp -r build/DmxVst_artefacts/${{ matrix.config }}/VST3/*.vst3 artifacts/macos/vst3/
+          mkdir -p dmg_au/LuxSync-AU-${{ matrix.arch }}
+          cp -r dist/au/* dmg_au/LuxSync-AU-${{ matrix.arch }}/ 2>/dev/null || true
+          ln -s /Library/Audio/Plug-Ins/Components dmg_au/AU-Plugins 2>/dev/null || true
+          hdiutil create -volname "LuxSync DMX AU" -srcfolder dmg_au -ov -format UDZO "LuxSync-DMX-AU-v${{ github.ref_name }}-macOS-${{ matrix.arch }}.dmg"
       
-      - name: Prepare artifacts - macOS Standalone
+      - name: Create DMG for VST3 Plugin
+        if: always()
         run: |
-          mkdir -p artifacts/macos/standalone
-          cp -r build/LuxAutomator_artefacts/${{ matrix.config }}/Standalone/*.app artifacts/macos/standalone/
+          mkdir -p dmg_vst3/LuxSync-VST3-${{ matrix.arch }}
+          cp -r dist/vst3/* dmg_vst3/LuxSync-VST3-${{ matrix.arch }}/ 2>/dev/null || true
+          ln -s /Library/Audio/Plug-Ins/VST3 dmg_vst3/VST3-Plugins 2>/dev/null || true
+          hdiutil create -volname "LuxSync DMX VST3" -srcfolder dmg_vst3 -ov -format UDZO "LuxSync-DMX-VST3-v${{ github.ref_name }}-macOS-${{ matrix.arch }}.dmg"
       
-      - name: Create DMG for macOS VST3
+      - name: Create DMG for Standalone
+        if: always()
         run: |
-          mkdir -p dmg_content/LuxSync\ DMX\ VST3-${{ matrix.arch }}
-          cp -r artifacts/macos/vst3/* dmg_content/LuxSync\ DMX\ VST3-${{ matrix.arch }}/
-          ln -s /Library/Audio/Plug-Ins/VST3 dmg_content/VST3-Plugins
-          hdiutil create -volname "LuxSync DMX VST3" -srcfolder dmg_content -ov -format UDZO LuxSync-DMX-VST3-macOS-${{ matrix.arch }}.dmg
+          mkdir -p dmg_app/LuxSync-Automator-${{ matrix.arch }}
+          cp -r dist/standalone/* dmg_app/LuxSync-Automator-${{ matrix.arch }}/ 2>/dev/null || true
+          hdiutil create -volname "LuxSync AI Automator" -srcfolder dmg_app -ov -format UDZO "LuxSync-AIAutomator-v${{ github.ref_name }}-macOS-${{ matrix.arch }}.dmg"
       
-      - name: Create DMG for macOS AU
-        run: |
-          mkdir -p dmg_au/LuxSync\ DMX\ AU-${{ matrix.arch }}
-          cp -r artifacts/macos/au/* dmg_au/LuxSync\ DMX\ AU-${{ matrix.arch }}/
-          ln -s /Library/Audio/Plug-Ins/Components dmg_au/AU-Plugins
-          hdiutil create -volname "LuxSync DMX AU" -srcfolder dmg_au -ov -format UDZO LuxSync-DMX-AU-macOS-${{ matrix.arch }}.dmg
-      
-      - name: Create DMG for macOS Standalone
-        run: |
-          mkdir -p dmg_app
-          cp -r artifacts/macos/standalone/LuxAutomator.app dmg_app/
-          hdiutil create -volname "LuxSync AI Automator" -srcfolder dmg_app -ov -format UDZO LuxSync-AIAutomator-macOS-${{ matrix.arch }}.dmg
-      
-      - name: Upload macOS VST3 Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-vst3-${{ matrix.arch }}
-          path: LuxSync-DMX-VST3-macOS-*.dmg
-          retention-days: 7
-      
-      - name: Upload macOS AU Artifact
+      - name: Upload AU Plugin
         uses: actions/upload-artifact@v4
         with:
           name: macos-au-${{ matrix.arch }}
-          path: LuxSync-DMX-AU-macOS-*.dmg
+          path: "LuxSync-DMX-AU-*.dmg"
           retention-days: 7
       
-      - name: Upload macOS Standalone Artifact
+      - name: Upload VST3 Plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-vst3-${{ matrix.arch }}
+          path: "LuxSync-DMX-VST3-*.dmg"
+          retention-days: 7
+      
+      - name: Upload Standalone
         uses: actions/upload-artifact@v4
         with:
           name: macos-standalone-${{ matrix.arch }}
-          path: LuxSync-AIAutomator-macOS-*.dmg
+          path: "LuxSync-AIAutomator-*.dmg"
           retention-days: 7
 
   create-release:
     needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
+    if: always()
     steps:
       - uses: actions/checkout@v4
       
-      - name: Download Windows VST3
+      - name: Create Release Artifacts Directory
+        run: |
+          mkdir -p release-artifacts
+      
+      - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
-          name: windows-vst3
-          path: release-artifacts/
+          path: artifacts-temp
       
-      - name: Download Windows Standalone
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-standalone
-          path: release-artifacts/windows-standalone/
+      - name: Organize and move artifacts
+        run: |
+          find artifacts-temp -type f \( -name "*.zip" -o -name "*.dmg" \) -exec cp {} release-artifacts/ \;
       
-      - name: Download macOS VST3 (arm64)
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-vst3-arm64
-          path: release-artifacts/
-      
-      - name: Download macOS VST3 (x86_64)
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-vst3-x86_64
-          path: release-artifacts/
-      
-      - name: Download macOS AU (arm64)
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-au-arm64
-          path: release-artifacts/
-      
-      - name: Download macOS AU (x86_64)
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-au-x86_64
-          path: release-artifacts/
-      
-      - name: Download macOS Standalone (arm64)
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-standalone-arm64
-          path: release-artifacts/
-      
-      - name: Download macOS Standalone (x86_64)
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-standalone-x86_64
-          path: release-artifacts/
-      
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: release-artifacts/**/*
+          files: release-artifacts/*
           draft: false
           prerelease: false
           generate_release_notes: true
