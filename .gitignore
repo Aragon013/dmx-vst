@@ -1,0 +1,61 @@
+# Build output
+/build/
+/cmake-build-*/
+/dist/
+/release/
+*.exe
+*.dmg
+*.zip
+
+# JUCE descargado por FetchContent
+/_deps/
+
+# IDE
+.vs/
+.idea/
+*.user
+*.vcxproj.user
+*.sln.DotSettings
+.vscode/.vscode/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+*.xcworkspace/
+build/
+DerivedData/
+.swiftpm/
+
+# Windows
+Thumbs.db
+desktop.ini
+*.lnk
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*~
+.gitignore~
+
+# Distribution/Release artifacts (created by scripts)
+installer/*.exe
+installer/*.nsi.bak
+dist/
+release/
+artifacts/
+
+# System files
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.lib
+*.pdb
+
+# Node/npm (if any helpers)
+node_modules/
+npm-debug.log
+yarn-error.log
