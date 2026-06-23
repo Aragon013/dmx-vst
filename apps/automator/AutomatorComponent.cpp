@@ -1,4 +1,5 @@
 #include "AutomatorComponent.h"
+#include <algorithm>
 
 using P = LuxLookAndFeel::Palette;
 

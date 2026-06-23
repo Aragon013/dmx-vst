@@ -8,6 +8,7 @@
 #include <vector>
 #include <algorithm>
 #include <map>
+#include <cmath>
 
 /**
     Genera un show DMX a partir del analisis offline (energia + transientes +

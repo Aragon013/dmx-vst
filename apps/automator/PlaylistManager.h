@@ -8,6 +8,7 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <algorithm>
 
 /**
     Gestiona la lista de temas del AI Automator: anadir, quitar, reordenar y

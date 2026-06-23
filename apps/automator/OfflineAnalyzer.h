@@ -7,6 +7,8 @@
 #include "StemSeparator.h"
 #include <functional>
 #include <vector>
+#include <algorithm>
+#include <cmath>
 
 /**
     Analizador OFFLINE (Fase 3: analisis DSP real).

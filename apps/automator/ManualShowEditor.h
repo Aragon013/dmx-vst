@@ -5,6 +5,7 @@
 #include "../../source/Sequence.h"
 #include "../../source/LuxLookAndFeel.h"
 #include "DmxShow.h"
+#include <algorithm>
 
 /**
     Piano-roll MANUAL para el Automator (Fase 4).
