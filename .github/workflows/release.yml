@@ -28,39 +28,32 @@ jobs:
         run: |
           cmake --build build --config Release --target LuxAutomator
       
-      - name: Prepare artifacts - Windows VST3
+      - name: Prepare VST3 Plugin
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path "dist\windows\vst3" -Force | Out-Null
-          Copy-Item -Path "build\DmxVst_artefacts\Release\VST3\*" -Destination "dist\windows\vst3\" -Recurse -Force
+          New-Item -ItemType Directory -Path "dist\vst3" -Force | Out-Null
+          Copy-Item -Path "build\DmxVst_artefacts\Release\VST3\LuxSync DMX.vst3" -Destination "dist\vst3\" -Recurse -Force
       
-      - name: Prepare artifacts - Windows Standalone
+      - name: Prepare Standalone Apps
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path "dist\windows\standalone" -Force | Out-Null
-          Copy-Item -Path "build\LuxAutomator_artefacts\Release\Standalone\*" -Destination "dist\windows\standalone\" -Recurse -Force
+          New-Item -ItemType Directory -Path "dist\standalone" -Force | Out-Null
+          Copy-Item -Path "build\DmxVst_artefacts\Release\Standalone\*.exe" -Destination "dist\standalone\" -Force
+          Copy-Item -Path "build\LuxAutomator_artefacts\Release\*.exe" -Destination "dist\standalone\" -Force
       
-      - name: Package VST3 & Standalone
+      - name: Create ZIP Archives
         shell: pwsh
         run: |
-          # Package VST3 as ZIP
-          Compress-Archive -Path "dist\windows\vst3\*" -DestinationPath "LuxSync-DMX-VST3-v${{ github.ref_name }}-Windows-x64.zip" -Force
-          
-          # Package Standalone as ZIP
-          Compress-Archive -Path "dist\windows\standalone\*" -DestinationPath "LuxSync-AIAutomator-v${{ github.ref_name }}-Windows-x64.zip" -Force
+          $tagName = "${{ github.ref_name }}"
+          Compress-Archive -Path "dist\vst3\*" -DestinationPath "LuxSync-DMX-VST3-$tagName-Windows-x64.zip" -Force
+          Compress-Archive -Path "dist\standalone\*" -DestinationPath "LuxSync-AIAutomator-$tagName-Windows-x64.zip" -Force
+          Get-ChildItem -Path "*.zip" | Select-Object Name, Length
       
-      - name: Upload Windows VST3 Artifact
+      - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-vst3
-          path: LuxSync-DMX-VST3-*.zip
-          retention-days: 7
-      
-      - name: Upload Windows Standalone Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-standalone
-          path: LuxSync-AIAutomator-v*.zip
+          name: windows-releases
+          path: "*.zip"
           retention-days: 7
 
   build-macos:
@@ -88,55 +81,63 @@ jobs:
         run: |
           cmake --build build --config Release --target LuxAutomator
       
-      - name: Prepare artifacts
+      - name: Check Build Artifacts
+        run: |
+          echo "=== Checking artifacts ==="
+          find build -name "*.app" -o -name "*.component" -o -name "*.vst3" | head -20
+      
+      - name: Prepare Artifacts
         run: |
           mkdir -p dist/au dist/vst3 dist/standalone
-          cp -r build/DmxVst_artefacts/Release/AU/*.component dist/au/ 2>/dev/null || true
-          cp -r build/DmxVst_artefacts/Release/VST3/*.vst3 dist/vst3/ 2>/dev/null || true
-          cp -r build/LuxAutomator_artefacts/Release/Standalone/*.app dist/standalone/ 2>/dev/null || true
+          find build/DmxVst_artefacts/Release -name "*.component" -type d -exec cp -r {} dist/au/ \; 2>/dev/null || true
+          find build/DmxVst_artefacts/Release -name "*.vst3" -type d -exec cp -r {} dist/vst3/ \; 2>/dev/null || true
+          find build/LuxAutomator_artefacts/Release -name "*.app" -type d -exec cp -r {} dist/standalone/ \; 2>/dev/null || true
       
-      - name: Create DMG for AU Plugin
-        if: always()
+      - name: Create DMG - AU Plugin
         run: |
-          mkdir -p dmg_au/LuxSync-AU-${{ matrix.arch }}
-          cp -r dist/au/* dmg_au/LuxSync-AU-${{ matrix.arch }}/ 2>/dev/null || true
-          ln -s /Library/Audio/Plug-Ins/Components dmg_au/AU-Plugins 2>/dev/null || true
-          hdiutil create -volname "LuxSync DMX AU" -srcfolder dmg_au -ov -format UDZO "LuxSync-DMX-AU-v${{ github.ref_name }}-macOS-${{ matrix.arch }}.dmg"
+          if [ -d "dist/au" ] && [ "$(ls -A dist/au)" ]; then
+            mkdir -p dmg_au
+            cp -r dist/au/* dmg_au/
+            ln -s /Library/Audio/Plug-Ins/Components dmg_au/AU-Plugins
+            hdiutil create -volname "LuxSync DMX AU" -srcfolder dmg_au -ov -format UDZO "LuxSync-DMX-AU-${{ github.ref_name }}-macOS-${{ matrix.arch }}.dmg"
+            echo "AU DMG created successfully"
+          else
+            echo "Warning: AU plugin not found, skipping AU DMG"
+          fi
       
-      - name: Create DMG for VST3 Plugin
-        if: always()
+      - name: Create DMG - VST3 Plugin
         run: |
-          mkdir -p dmg_vst3/LuxSync-VST3-${{ matrix.arch }}
-          cp -r dist/vst3/* dmg_vst3/LuxSync-VST3-${{ matrix.arch }}/ 2>/dev/null || true
-          ln -s /Library/Audio/Plug-Ins/VST3 dmg_vst3/VST3-Plugins 2>/dev/null || true
-          hdiutil create -volname "LuxSync DMX VST3" -srcfolder dmg_vst3 -ov -format UDZO "LuxSync-DMX-VST3-v${{ github.ref_name }}-macOS-${{ matrix.arch }}.dmg"
+          if [ -d "dist/vst3" ] && [ "$(ls -A dist/vst3)" ]; then
+            mkdir -p dmg_vst3
+            cp -r dist/vst3/* dmg_vst3/
+            ln -s /Library/Audio/Plug-Ins/VST3 dmg_vst3/VST3-Plugins
+            hdiutil create -volname "LuxSync DMX VST3" -srcfolder dmg_vst3 -ov -format UDZO "LuxSync-DMX-VST3-${{ github.ref_name }}-macOS-${{ matrix.arch }}.dmg"
+            echo "VST3 DMG created successfully"
+          else
+            echo "Warning: VST3 plugin not found, skipping VST3 DMG"
+          fi
       
-      - name: Create DMG for Standalone
-        if: always()
+      - name: Create DMG - Standalone App
         run: |
-          mkdir -p dmg_app/LuxSync-Automator-${{ matrix.arch }}
-          cp -r dist/standalone/* dmg_app/LuxSync-Automator-${{ matrix.arch }}/ 2>/dev/null || true
-          hdiutil create -volname "LuxSync AI Automator" -srcfolder dmg_app -ov -format UDZO "LuxSync-AIAutomator-v${{ github.ref_name }}-macOS-${{ matrix.arch }}.dmg"
+          if [ -d "dist/standalone" ] && [ "$(ls -A dist/standalone)" ]; then
+            mkdir -p dmg_app
+            cp -r dist/standalone/* dmg_app/
+            hdiutil create -volname "LuxSync AI Automator" -srcfolder dmg_app -ov -format UDZO "LuxSync-AIAutomator-${{ github.ref_name }}-macOS-${{ matrix.arch }}.dmg"
+            echo "Standalone DMG created successfully"
+          else
+            echo "Warning: Standalone app not found, skipping Standalone DMG"
+          fi
       
-      - name: Upload AU Plugin
+      - name: List Generated DMGs
+        run: |
+          echo "=== Generated DMGs ==="
+          ls -lh *.dmg 2>/dev/null || echo "No DMGs found"
+      
+      - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-au-${{ matrix.arch }}
-          path: "LuxSync-DMX-AU-*.dmg"
-          retention-days: 7
-      
-      - name: Upload VST3 Plugin
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-vst3-${{ matrix.arch }}
-          path: "LuxSync-DMX-VST3-*.dmg"
-          retention-days: 7
-      
-      - name: Upload Standalone
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-standalone-${{ matrix.arch }}
-          path: "LuxSync-AIAutomator-*.dmg"
+          name: macos-releases-${{ matrix.arch }}
+          path: "*.dmg"
           retention-days: 7
 
   create-release:
@@ -146,18 +147,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Create Release Artifacts Directory
-        run: |
-          mkdir -p release-artifacts
+      - name: Create Release Directory
+        run: mkdir -p release-artifacts
       
-      - name: Download Windows artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts-temp
+          path: all-artifacts
       
-      - name: Organize and move artifacts
+      - name: Organize Release Artifacts
         run: |
-          find artifacts-temp -type f \( -name "*.zip" -o -name "*.dmg" \) -exec cp {} release-artifacts/ \;
+          echo "=== All Downloaded Artifacts ==="
+          find all-artifacts -type f | sort
+          echo ""
+          echo "=== Copying to release-artifacts ==="
+          find all-artifacts -type f -exec cp {} release-artifacts/ \;
+          echo ""
+          echo "=== Final Release Artifacts ==="
+          ls -lh release-artifacts/
       
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
